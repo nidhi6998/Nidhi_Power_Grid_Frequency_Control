@@ -51,7 +51,8 @@ Where:
 ---
 
 ## Block Diagram
-![Block Diagram](block diagram.png)
+
+ ![Block Diagram](block diagram.png)
 
 ---
 
