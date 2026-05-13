@@ -51,7 +51,7 @@ Where:
 ---
 
 ## Block Diagram
-block diagram.png
+images/block diagram.png
 ---
 
 ## Simulation Response
