@@ -96,6 +96,7 @@ This system can also be implemented in portable microgrids used in disaster reli
 
 ## Result after Simulation
 
+ ![Output Graph](output.jpeg)
 
 ## Verification using Code
 
@@ -208,6 +209,9 @@ fprintf('\n===== CLOSED LOOP SYSTEM =====\n');
 T
 
 ## Code Output 
+
+![Output Graph](output.jpeg)
+
 
 
 ## Conclusion
