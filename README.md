@@ -51,7 +51,7 @@ Where:
 ---
 
 ## Block Diagram
-images/block diagram.png
+![Block Diagram](images/block diagram.png)
 ---
 
 ## Simulation Response
