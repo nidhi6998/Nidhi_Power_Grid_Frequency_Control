@@ -110,7 +110,7 @@ The disturbance introduced at t = 8 seconds causes a temporary frequency deviati
 
 - MATLAB
 - Simulink
-- PID Controller
+- PI Controller
 - Control System Toolbox
 
 ## Result after Simulation
