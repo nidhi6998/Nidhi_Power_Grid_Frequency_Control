@@ -117,9 +117,11 @@ The disturbance introduced at t = 8 seconds causes a temporary frequency deviati
 
  ![Output Graph](output.jpeg)
 
-## Video Representation
+## Video Representations
 
 ![video](microgrid_pid_frequency_control_simulation.html)
+
+
 
 
 ## Verification using Code
