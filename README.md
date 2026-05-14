@@ -117,6 +117,11 @@ The disturbance introduced at t = 8 seconds causes a temporary frequency deviati
 
  ![Output Graph](output.jpeg)
 
+## Video Representation
+
+
+
+
 ## Verification using Code
 
 %% Power Grid Frequency Control Using PI/PID Controller
