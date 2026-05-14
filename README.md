@@ -240,4 +240,4 @@ T
 
 ## Conclusion
 
-The proposed PI/PID-based frequency control system successfully stabilizes frequency deviations caused by sudden load disturbances. The controller improves system stability, reduces oscillations, and ensures faster recovery of the power grid frequency.
+The proposed PI based frequency control system successfully stabilizes frequency deviations caused by sudden load disturbances. The controller improves system stability, reduces oscillations, and ensures faster recovery of the power grid frequency.
