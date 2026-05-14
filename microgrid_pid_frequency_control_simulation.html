@@ -1,0 +1,433 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0a0f1a;color:#c8d8e8;font-family:'Courier New',monospace}
+#sim{width:100%;aspect-ratio:16/9;background:#0a0f1a;position:relative;overflow:hidden;border-radius:8px}
+.hud-top{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:10px 16px;background:rgba(0,20,40,0.85);border-bottom:1px solid #1e3a5a;z-index:10}
+.logo{font-size:11px;color:#4a9ece;letter-spacing:2px;font-weight:bold}
+.hud-title{font-size:12px;color:#a0c4dc;letter-spacing:1px}
+.hud-time{font-size:11px;color:#6a9cbc;font-family:monospace}
+.grid-bg{position:absolute;inset:0;opacity:0.06;background-image:linear-gradient(#4a9ece 1px,transparent 1px),linear-gradient(90deg,#4a9ece 1px,transparent 1px);background-size:40px 40px}
+.main-area{position:absolute;top:38px;bottom:0;left:0;right:0;display:flex;padding:8px;gap:8px}
+.left-col{width:38%;display:flex;flex-direction:column;gap:6px}
+.right-col{flex:1;display:flex;flex-direction:column;gap:6px}
+.panel{background:rgba(4,18,35,0.9);border:1px solid #1a3a5a;border-radius:4px;padding:8px}
+.panel-title{font-size:9px;color:#4a9ece;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;border-bottom:1px solid #1a3a5a;padding-bottom:4px}
+.freq-big{font-size:28px;font-weight:bold;font-family:monospace;text-align:center;line-height:1}
+.freq-unit{font-size:10px;color:#6a9cbc;text-align:center;margin-top:2px}
+.status-row{display:flex;gap:6px;flex-wrap:wrap}
+.status-badge{font-size:9px;padding:3px 7px;border-radius:2px;letter-spacing:1px;border:1px solid}
+.badge-ok{color:#2aba7a;border-color:#2aba7a;background:rgba(42,186,122,0.08)}
+.badge-warn{color:#f0a830;border-color:#f0a830;background:rgba(240,168,48,0.12)}
+.badge-crit{color:#e84040;border-color:#e84040;background:rgba(232,64,64,0.12)}
+.badge-info{color:#4a9ece;border-color:#4a9ece;background:rgba(74,158,206,0.08)}
+.device-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.device-item{display:flex;align-items:center;gap:6px;padding:4px 6px;border:1px solid #1a3a5a;border-radius:3px;font-size:9px}
+.dev-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.dev-label{color:#a0c4dc}
+.dev-load{color:#6a9cbc;margin-left:auto}
+.alarm-box{border:1px solid #e84040;background:rgba(232,64,64,0.06);border-radius:3px;padding:5px 8px;display:flex;align-items:center;gap:7px;font-size:9px;color:#e84040;letter-spacing:1px}
+.pid-row{display:flex;justify-content:space-between;margin-bottom:3px;font-size:9px}
+.pid-label{color:#6a9cbc}
+.pid-val{color:#4a9ece;font-family:monospace}
+.pid-bar-wrap{height:4px;background:#0d2035;border-radius:2px;margin-bottom:4px}
+.pid-bar{height:4px;border-radius:2px;background:#4a9ece;transition:width 0.3s}
+canvas{display:block;width:100%;border-radius:3px}
+.gen-row{display:flex;gap:4px}
+.gen-box{flex:1;padding:5px 6px;border:1px solid #1a3a5a;border-radius:3px;text-align:center;font-size:8px}
+.gen-pct{font-size:14px;font-weight:bold;color:#4a9ece;font-family:monospace}
+.gen-lbl{color:#6a9cbc;font-size:8px;margin-top:1px}
+.phase-label{position:absolute;bottom:12px;right:12px;font-size:9px;color:#4a9ece;letter-spacing:2px;opacity:0.7}
+.overlay-msg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(232,64,64,0.12);border:1px solid #e84040;padding:10px 20px;border-radius:4px;font-size:11px;color:#e84040;letter-spacing:2px;text-align:center;pointer-events:none;transition:opacity 0.5s}
+.restore-msg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(42,186,122,0.08);border:1px solid #2aba7a;padding:10px 20px;border-radius:4px;font-size:11px;color:#2aba7a;letter-spacing:2px;text-align:center;pointer-events:none;transition:opacity 0.5s}
+</style>
+
+<div id="sim">
+  <div class="grid-bg"></div>
+  <div class="hud-top">
+    <div class="logo">⬡ MICROGRID CTRL</div>
+    <div class="hud-title">PORTABLE ENERGY MANAGEMENT SYSTEM — DISASTER RELIEF / TACTICAL DEFENSE</div>
+    <div class="hud-time" id="hud-time">T+00:00</div>
+  </div>
+  <div class="main-area">
+    <div class="left-col">
+      <div class="panel">
+        <div class="panel-title">Grid Frequency</div>
+        <div class="freq-big" id="freq-display">50.00</div>
+        <div class="freq-unit">Hz  ·  Nominal 50.0 Hz</div>
+        <div style="margin-top:8px" class="status-row">
+          <div class="status-badge" id="badge-grid">STABLE</div>
+          <div class="status-badge badge-info">ISO 50.0Hz</div>
+        </div>
+        <div style="height:4px;background:#0d2035;border-radius:2px;margin-top:8px">
+          <div id="freq-bar" style="height:4px;border-radius:2px;background:#2aba7a;transition:width 0.2s,background 0.3s;width:50%"></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Active Loads</div>
+        <div class="device-grid" id="device-list">
+          <div class="device-item"><div class="dev-dot" style="background:#2aba7a"></div><div class="dev-label">Gen A</div><div class="dev-load">45kW</div></div>
+          <div class="device-item"><div class="dev-dot" style="background:#2aba7a"></div><div class="dev-label">Gen B</div><div class="dev-load">38kW</div></div>
+          <div class="device-item"><div class="dev-dot" style="background:#4a9ece"></div><div class="dev-label">Lighting</div><div class="dev-load">12kW</div></div>
+          <div class="device-item"><div class="dev-dot" style="background:#4a9ece"></div><div class="dev-label">Comms</div><div class="dev-load">8kW</div></div>
+        </div>
+      </div>
+      <div class="panel" id="alarm-panel" style="opacity:0;transition:opacity 0.4s">
+        <div class="panel-title">System Alarms</div>
+        <div class="alarm-box" style="margin-bottom:4px" id="alarm1">⚠ FREQ DEVIATION DETECTED</div>
+        <div class="alarm-box" id="alarm2" style="opacity:0">⚠ LOAD SURGE — MEDICAL/RADAR</div>
+        <div style="margin-top:6px;font-size:8px;color:#6a9cbc" id="alarm-sub">INITIATING PID CORRECTIVE ACTION...</div>
+      </div>
+      <div class="panel" id="pid-panel">
+        <div class="panel-title">PID Controller</div>
+        <div class="pid-row"><span class="pid-label">Kp (Proportional)</span><span class="pid-val" id="kp-val">0.00</span></div>
+        <div class="pid-bar-wrap"><div class="pid-bar" id="kp-bar" style="width:0%"></div></div>
+        <div class="pid-row"><span class="pid-label">Ki (Integral)</span><span class="pid-val" id="ki-val">0.00</span></div>
+        <div class="pid-bar-wrap"><div class="pid-bar" id="ki-bar" style="width:0%;background:#f0a830"></div></div>
+        <div class="pid-row"><span class="pid-label">Kd (Derivative)</span><span class="pid-val" id="kd-val">0.00</span></div>
+        <div class="pid-bar-wrap"><div class="pid-bar" id="kd-bar" style="width:0%;background:#2aba7a"></div></div>
+        <div class="pid-row" style="margin-top:5px"><span class="pid-label">Control Output</span><span class="pid-val" id="pid-out">0.00 MW</span></div>
+        <div class="pid-row"><span class="pid-label">Error Signal</span><span class="pid-val" id="pid-err">0.000 Hz</span></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Portable Generators</div>
+        <div class="gen-row">
+          <div class="gen-box"><div class="gen-pct" id="gen-a">85%</div><div class="gen-lbl">GEN-A</div><div class="gen-lbl" style="color:#4a9ece">45kW</div></div>
+          <div class="gen-box"><div class="gen-pct" id="gen-b">72%</div><div class="gen-lbl">GEN-B</div><div class="gen-lbl" style="color:#4a9ece">38kW</div></div>
+          <div class="gen-box"><div class="gen-pct" id="gen-c">0%</div><div class="gen-lbl">GEN-C</div><div class="gen-lbl" style="color:#6a9cbc">STANDBY</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="right-col">
+      <div class="panel" style="flex:1.4">
+        <div class="panel-title">Grid Frequency — Real-Time Monitor</div>
+        <canvas id="freq-canvas" height="140"></canvas>
+      </div>
+      <div class="panel" style="flex:1">
+        <div class="panel-title">PID Output vs Load Disturbance</div>
+        <canvas id="pid-canvas" height="100"></canvas>
+      </div>
+      <div class="panel" style="flex:0.7">
+        <div class="panel-title">Emergency Operations — Load Events</div>
+        <div id="event-log" style="font-size:8px;color:#6a9cbc;line-height:1.8;height:60px;overflow:hidden"></div>
+      </div>
+    </div>
+  </div>
+  <div class="overlay-msg" id="overlay-msg" style="opacity:0">⚠ GRID FREQUENCY INSTABILITY DETECTED</div>
+  <div class="restore-msg" id="restore-msg" style="opacity:0">✓ SYSTEM STABILIZED — PID CONTROL ACTIVE</div>
+  <div class="phase-label" id="phase-lbl">PHASE 1 — BASELINE OPERATION</div>
+</div>
+
+<script>
+const freqCanvas = document.getElementById('freq-canvas');
+const pidCanvas = document.getElementById('pid-canvas');
+const fCtx = freqCanvas.getContext('2d');
+const pCtx = pidCanvas.getContext('2d');
+
+freqCanvas.width = freqCanvas.offsetWidth * window.devicePixelRatio || 800;
+freqCanvas.height = 280;
+pidCanvas.width = pidCanvas.offsetWidth * window.devicePixelRatio || 800;
+pidCanvas.height = 200;
+
+const freqData = [];
+const pidData = [];
+const loadData = [];
+const maxPts = 180;
+
+let t = 0;
+let startTime = Date.now();
+let phase = 0; // 0=stable, 1=disturbance, 2=pid_active, 3=stable_restored
+
+const NOMINAL = 50.0;
+let targetFreq = 50.0;
+let currentFreq = 50.0;
+let pidOutput = 0;
+let integralErr = 0;
+let prevErr = 0;
+let freqVelocity = 0;
+
+const events = [
+  {t:60, label:'Baseline — Gen A+B online, comms active'},
+  {t:90, label:'ALERT: Medical equip. surge +18kW'},
+  {t:100, label:'ALERT: Radar system activated +22kW'},
+  {t:110, label:'CRIT: Emergency lighting burst +15kW'},
+  {t:120, label:'PID controller — disturbance detected'},
+  {t:135, label:'PID: Proportional correction applied'},
+  {t:155, label:'PID: Integral correction ramping'},
+  {t:175, label:'Gen-C initiated — load balancing'},
+  {t:200, label:'Grid stabilizing — oscillations damping'},
+  {t:230, label:'RESTORED: 50.0Hz — normal operation'},
+];
+let loggedEvents = new Set();
+
+function logEvent(msg) {
+  const log = document.getElementById('event-log');
+  const now = ((Date.now()-startTime)/1000).toFixed(1);
+  log.innerHTML = `<span style="color:#4a9ece">T+${now}s</span> ${msg}<br>` + log.innerHTML;
+}
+
+function setPhase(p) {
+  phase = p;
+  const lbl = document.getElementById('phase-lbl');
+  if(p===0) lbl.textContent='PHASE 1 — BASELINE OPERATION';
+  else if(p===1) lbl.textContent='PHASE 2 — LOAD DISTURBANCE';
+  else if(p===2) lbl.textContent='PHASE 3 — PID CORRECTIVE CONTROL';
+  else if(p===3) lbl.textContent='PHASE 4 — STABLE OPERATION RESTORED';
+}
+
+function updateDevices(p) {
+  const dl = document.getElementById('device-list');
+  if(p===0){
+    dl.innerHTML=`
+      <div class="device-item"><div class="dev-dot" style="background:#2aba7a"></div><div class="dev-label">Gen A</div><div class="dev-load">45kW</div></div>
+      <div class="device-item"><div class="dev-dot" style="background:#2aba7a"></div><div class="dev-label">Gen B</div><div class="dev-load">38kW</div></div>
+      <div class="device-item"><div class="dev-dot" style="background:#4a9ece"></div><div class="dev-label">Lighting</div><div class="dev-load">12kW</div></div>
+      <div class="device-item"><div class="dev-dot" style="background:#4a9ece"></div><div class="dev-label">Comms</div><div class="dev-load">8kW</div></div>`;
+  } else if(p===1){
+    dl.innerHTML=`
+      <div class="device-item"><div class="dev-dot" style="background:#e84040"></div><div class="dev-label">Medical</div><div class="dev-load" style="color:#e84040">+18kW</div></div>
+      <div class="device-item"><div class="dev-dot" style="background:#e84040"></div><div class="dev-label">Radar</div><div class="dev-load" style="color:#e84040">+22kW</div></div>
+      <div class="device-item"><div class="dev-dot" style="background:#f0a830"></div><div class="dev-label">Emerg Light</div><div class="dev-load" style="color:#f0a830">+15kW</div></div>
+      <div class="device-item"><div class="dev-dot" style="background:#f0a830"></div><div class="dev-label">Comms Boost</div><div class="dev-load" style="color:#f0a830">+9kW</div></div>`;
+  } else if(p===2){
+    dl.innerHTML=`
+      <div class="device-item"><div class="dev-dot" style="background:#f0a830"></div><div class="dev-label">Medical</div><div class="dev-load" style="color:#f0a830">18kW</div></div>
+      <div class="device-item"><div class="dev-dot" style="background:#f0a830"></div><div class="dev-label">Radar</div><div class="dev-load" style="color:#f0a830">22kW</div></div>
+      <div class="device-item"><div class="dev-dot" style="background:#4a9ece"></div><div class="dev-label">Gen-C Online</div><div class="dev-load" style="color:#4a9ece">+40kW</div></div>
+      <div class="device-item"><div class="dev-dot" style="background:#2aba7a"></div><div class="dev-label">PID Active</div><div class="dev-load" style="color:#2aba7a">CTRL</div></div>`;
+  } else {
+    dl.innerHTML=`
+      <div class="device-item"><div class="dev-dot" style="background:#2aba7a"></div><div class="dev-label">Gen A</div><div class="dev-load">55kW</div></div>
+      <div class="device-item"><div class="dev-dot" style="background:#2aba7a"></div><div class="dev-label">Gen B</div><div class="dev-load">48kW</div></div>
+      <div class="device-item"><div class="dev-dot" style="background:#2aba7a"></div><div class="dev-label">Gen C</div><div class="dev-load">40kW</div></div>
+      <div class="device-item"><div class="dev-dot" style="background:#2aba7a"></div><div class="dev-label">All Systems</div><div class="dev-load" style="color:#2aba7a">STABLE</div></div>`;
+  }
+}
+
+function drawFreqChart(){
+  const W = freqCanvas.width, H = freqCanvas.height;
+  fCtx.clearRect(0,0,W,H);
+  fCtx.fillStyle='rgba(4,15,30,0.95)';
+  fCtx.fillRect(0,0,W,H);
+
+  // grid lines
+  const freqLines = [49.0,49.5,50.0,50.5,51.0];
+  freqLines.forEach(f=>{
+    const y = H - ((f-48.5)/3)*H;
+    fCtx.strokeStyle = f===50.0 ? 'rgba(74,158,206,0.3)' : 'rgba(74,158,206,0.1)';
+    fCtx.lineWidth=f===50.0?1.5:0.5;
+    fCtx.beginPath(); fCtx.moveTo(0,y); fCtx.lineTo(W,y); fCtx.stroke();
+    fCtx.fillStyle='rgba(74,158,206,0.5)';
+    fCtx.font=`${Math.max(10,W*0.011)}px monospace`;
+    fCtx.fillText(f.toFixed(1)+'Hz',4,y-3);
+  });
+
+  // warning bands
+  fCtx.fillStyle='rgba(232,64,64,0.04)';
+  const warnTop = H - ((51.0-48.5)/3)*H;
+  const warnBot = H - ((49.0-48.5)/3)*H;
+  fCtx.fillRect(0,0,W,warnTop);
+  fCtx.fillRect(0,warnBot,W,H-warnBot);
+
+  // freq line
+  if(freqData.length>1){
+    const grad = fCtx.createLinearGradient(0,0,0,H);
+    grad.addColorStop(0,'rgba(232,64,64,0.8)');
+    grad.addColorStop(0.4,'rgba(240,168,48,0.8)');
+    grad.addColorStop(0.6,'rgba(42,186,122,0.8)');
+    grad.addColorStop(1,'rgba(42,186,122,0.8)');
+
+    fCtx.beginPath();
+    freqData.forEach((f,i)=>{
+      const x=(i/(maxPts-1))*W;
+      const y=H-((f-48.5)/3)*H;
+      i===0?fCtx.moveTo(x,y):fCtx.lineTo(x,y);
+    });
+    fCtx.strokeStyle=grad; fCtx.lineWidth=2.5; fCtx.stroke();
+
+    // fill under
+    fCtx.lineTo(W,H); fCtx.lineTo(0,H); fCtx.closePath();
+    const fillGrad=fCtx.createLinearGradient(0,0,0,H);
+    fillGrad.addColorStop(0,'rgba(42,186,122,0.08)');
+    fillGrad.addColorStop(1,'rgba(42,186,122,0)');
+    fCtx.fillStyle=fillGrad; fCtx.fill();
+  }
+
+  // current value marker
+  if(freqData.length>0){
+    const lastF=freqData[freqData.length-1];
+    const x=W-2;
+    const y=H-((lastF-48.5)/3)*H;
+    fCtx.fillStyle=lastF<49.5||lastF>50.5?'#e84040':'#2aba7a';
+    fCtx.beginPath(); fCtx.arc(x,y,4,0,Math.PI*2); fCtx.fill();
+  }
+}
+
+function drawPidChart(){
+  const W=pidCanvas.width, H=pidCanvas.height;
+  pCtx.clearRect(0,0,W,H);
+  pCtx.fillStyle='rgba(4,15,30,0.95)';
+  pCtx.fillRect(0,0,W,H);
+
+  // zero line
+  pCtx.strokeStyle='rgba(74,158,206,0.2)'; pCtx.lineWidth=0.5;
+  pCtx.beginPath(); pCtx.moveTo(0,H/2); pCtx.lineTo(W,H/2); pCtx.stroke();
+  pCtx.fillStyle='rgba(74,158,206,0.4)'; pCtx.font=`${Math.max(9,W*0.011)}px monospace`;
+  pCtx.fillText('0',2,H/2-3);
+
+  if(pidData.length>1){
+    // PID output
+    pCtx.beginPath();
+    pidData.forEach((v,i)=>{
+      const x=(i/(maxPts-1))*W;
+      const y=H/2 - (v/1.5)*(H/2)*0.8;
+      i===0?pCtx.moveTo(x,y):pCtx.lineTo(x,y);
+    });
+    pCtx.strokeStyle='#4a9ece'; pCtx.lineWidth=2; pCtx.stroke();
+
+    // load disturbance
+    pCtx.beginPath();
+    loadData.forEach((v,i)=>{
+      const x=(i/(maxPts-1))*W;
+      const y=H/2 - (v/1.5)*(H/2)*0.8;
+      i===0?pCtx.moveTo(x,y):pCtx.lineTo(x,y);
+    });
+    pCtx.strokeStyle='rgba(232,64,64,0.7)'; pCtx.lineWidth=1.5; pCtx.setLineDash([4,3]); pCtx.stroke();
+    pCtx.setLineDash([]);
+  }
+
+  // legend
+  pCtx.fillStyle='#4a9ece'; pCtx.font=`${Math.max(9,W*0.011)}px monospace`;
+  pCtx.fillText('— PID Output',4,12);
+  pCtx.fillStyle='#e84040';
+  pCtx.fillText('-- Load Disturbance',W*0.35,12);
+}
+
+function tick(){
+  t++;
+  const elapsed = (Date.now()-startTime)/1000;
+  document.getElementById('hud-time').textContent =
+    'T+' + String(Math.floor(elapsed/60)).padStart(2,'0') + ':' + String(Math.floor(elapsed%60)).padStart(2,'0');
+
+  events.forEach(ev=>{
+    if(t===ev.t && !loggedEvents.has(ev.t)){
+      loggedEvents.add(ev.t);
+      logEvent(ev.label);
+    }
+  });
+
+  let noise = (Math.random()-0.5)*0.02;
+  let loadDisturbance = 0;
+
+  if(t < 80){
+    setPhase(0);
+    targetFreq = NOMINAL;
+    integralErr = 0; prevErr = 0; pidOutput = 0;
+    document.getElementById('alarm-panel').style.opacity='0';
+    updateDevices(0);
+    if(t===79) updateDevices(0);
+  }
+
+  if(t >= 80 && t < 115){
+    if(t===80){ setPhase(1); updateDevices(1); }
+    const prog = (t-80)/35;
+    loadDisturbance = prog * 0.8 + Math.sin(prog*8)*0.12;
+    targetFreq = NOMINAL - loadDisturbance * 1.5;
+    document.getElementById('alarm-panel').style.opacity='1';
+    document.getElementById('alarm2').style.opacity = t>90?'1':'0';
+
+    const om = document.getElementById('overlay-msg');
+    om.style.opacity = t>85&&t<110?'1':'0';
+
+    document.getElementById('badge-grid').className='status-badge badge-crit';
+    document.getElementById('badge-grid').textContent='UNSTABLE';
+    document.getElementById('gen-a').textContent='98%';
+    document.getElementById('gen-a').style.color='#e84040';
+    document.getElementById('gen-b').textContent='97%';
+    document.getElementById('gen-b').style.color='#e84040';
+  }
+
+  if(t >= 115 && t < 240){
+    if(t===115){ setPhase(2); updateDevices(2); }
+    if(t===175){ document.getElementById('gen-c').textContent='72%'; document.getElementById('gen-c').parentElement.querySelector('.gen-lbl:last-child').textContent='40kW'; document.getElementById('gen-c').style.color='#2aba7a'; }
+
+    const distProg = Math.max(0,1-(t-115)/80);
+    loadDisturbance = distProg * 0.6;
+
+    const err = targetFreq - NOMINAL;
+    const Kp=1.8, Ki=0.35, Kd=0.25;
+    integralErr += err;
+    const derivative = err - prevErr;
+    pidOutput = Kp*err + Ki*integralErr*0.05 + Kd*derivative;
+    prevErr = err;
+    targetFreq = targetFreq - pidOutput*0.04 + noise*0.5;
+    targetFreq = Math.max(48.6, Math.min(51.4, targetFreq));
+
+    const recovery = Math.min(1,(t-115)/110);
+    targetFreq = targetFreq*(1-recovery*0.7) + NOMINAL*(recovery*0.7);
+
+    document.getElementById('kp-val').textContent = (Math.abs(pidOutput)*Kp*0.3).toFixed(2);
+    document.getElementById('ki-val').textContent = (Math.abs(integralErr)*Ki*0.002).toFixed(2);
+    document.getElementById('kd-val').textContent = (Math.abs(derivative)*Kd*2).toFixed(2);
+    document.getElementById('kp-bar').style.width = Math.min(100,Math.abs(pidOutput)*20)+'%';
+    document.getElementById('ki-bar').style.width = Math.min(100,Math.abs(integralErr)*0.5)+'%';
+    document.getElementById('kd-bar').style.width = Math.min(100,Math.abs(derivative)*30)+'%';
+    document.getElementById('pid-out').textContent = (pidOutput*0.1).toFixed(3)+' MW';
+    document.getElementById('pid-err').textContent = (targetFreq-NOMINAL).toFixed(3)+' Hz';
+
+    const rm = document.getElementById('restore-msg');
+    if(t > 200 && Math.abs(targetFreq-NOMINAL)<0.15){ rm.style.opacity='1'; }
+    else { rm.style.opacity='0'; }
+
+    if(recovery > 0.8){
+      document.getElementById('badge-grid').className='status-badge badge-ok';
+      document.getElementById('badge-grid').textContent='STABILIZING';
+    }
+  }
+
+  if(t >= 240){
+    if(t===240){ setPhase(3); updateDevices(3); }
+    targetFreq = NOMINAL + Math.sin(t*0.1)*0.008;
+    document.getElementById('badge-grid').className='status-badge badge-ok';
+    document.getElementById('badge-grid').textContent='STABLE';
+    document.getElementById('alarm-panel').style.opacity='0';
+    document.getElementById('restore-msg').style.opacity='1';
+    document.getElementById('overlay-msg').style.opacity='0';
+    document.getElementById('gen-a').textContent='68%'; document.getElementById('gen-a').style.color='#4a9ece';
+    document.getElementById('gen-b').textContent='61%'; document.getElementById('gen-b').style.color='#4a9ece';
+  }
+
+  if(t > 300){ t=0; startTime=Date.now(); loggedEvents.clear(); freqData.length=0; pidData.length=0; loadData.length=0; integralErr=0; prevErr=0; pidOutput=0; targetFreq=NOMINAL; currentFreq=NOMINAL; document.getElementById('event-log').innerHTML=''; }
+
+  const spring = 0.18;
+  freqVelocity += (targetFreq - currentFreq)*spring - freqVelocity*0.35 + noise*0.15;
+  currentFreq += freqVelocity;
+  currentFreq = Math.max(48.5, Math.min(51.5, currentFreq));
+
+  freqData.push(currentFreq);
+  pidData.push(pidOutput*0.08);
+  loadData.push(phase===1||(phase===2&&t<160) ? 0.5 : 0);
+  if(freqData.length>maxPts){ freqData.shift(); pidData.shift(); loadData.shift(); }
+
+  const fDisp = document.getElementById('freq-display');
+  fDisp.textContent = currentFreq.toFixed(2);
+  const dev = Math.abs(currentFreq-NOMINAL);
+  fDisp.style.color = dev>0.8?'#e84040':dev>0.35?'#f0a830':'#2aba7a';
+
+  const fb = document.getElementById('freq-bar');
+  const pct = ((currentFreq-48.5)/3)*100;
+  fb.style.width = Math.max(2,Math.min(98,pct))+'%';
+  fb.style.background = dev>0.8?'#e84040':dev>0.35?'#f0a830':'#2aba7a';
+
+  drawFreqChart();
+  drawPidChart();
+  requestAnimationFrame(tick);
+}
+
+window.addEventListener('resize',()=>{
+  freqCanvas.width=(freqCanvas.offsetWidth||800)*window.devicePixelRatio;
+  pidCanvas.width=(pidCanvas.offsetWidth||800)*window.devicePixelRatio;
+});
+
+tick();
+</script>
