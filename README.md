@@ -62,10 +62,29 @@ The disturbance introduced at t = 8 seconds causes a temporary frequency deviati
 
 ---
 
-## Add-On Application
+## Add-On Applications
 
-This system can also be implemented in portable microgrids used in disaster relief camps, military defense stations, and emergency rescue operations. Sudden activation of heavy loads such as medical equipment or communication systems may disturb the grid frequency, and the controller helps stabilize the power supply quickly and efficiently.
+### Defense Applications
+- Can be used in military camps and border surveillance stations operating on portable microgrids.
+- Helps stabilize frequency when high-power devices such as radar systems, drones, communication units, and surveillance equipment are suddenly activated.
+- Prevents power instability and ensures uninterrupted operation of critical defense systems.
+- Useful for mobile command centers and remote defense power systems where stable electricity is essential.
 
+---
+
+### Disaster Management Applications
+- Can be implemented in emergency relief camps and temporary rescue power grids.
+- Stabilizes power during sudden activation of medical equipment, water pumps, communication systems, and emergency lighting.
+- Reduces frequency fluctuations caused by varying emergency loads.
+- Ensures reliable and continuous electricity supply during floods, earthquakes, cyclones, and rescue operations.
+
+---
+
+### Smart Microgrid Relevance
+- Supports portable and isolated microgrid systems.
+- Improves grid reliability and disturbance rejection capability.
+- Demonstrates real-world implementation of automatic frequency stabilization using PI/PID controllers.
+- Applicable in smart grids, emergency infrastructure, and critical power management systems.
 ---
 
 ## Files Included
