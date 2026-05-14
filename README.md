@@ -1,8 +1,8 @@
-# Power Grid Frequency Control Using PI/PID Controller
+# Power Grid Frequency Control Using PI Controller
 
 ## Problem Statement
 
-Sudden load changes in a power grid can cause frequency deviations and instability in the system. The objective of this project is to design a PI/PID controller that stabilizes the system frequency quickly with minimal oscillations and stable response.
+Sudden load changes in a power grid can cause frequency deviations and instability in the system. The objective of this project is to design a PI controller that stabilizes the system frequency quickly with minimal oscillations and stable response.
 
 ---
 
@@ -32,7 +32,7 @@ Where:
 
 1. Modeled the power grid using a transfer function.
 2. Applied a sudden load disturbance at 8 seconds using a Step block.
-3. Designed a PI/PID controller for automatic correction.
+3. Designed a PI controller for automatic correction.
 4. Simulated the system response in MATLAB Simulink.
 5. Evaluated system stability and frequency restoration.
 
@@ -110,7 +110,7 @@ The disturbance introduced at t = 8 seconds causes a temporary frequency deviati
 
 - MATLAB
 - Simulink
-- PI/PID Controller
+- PID Controller
 - Control System Toolbox
 
 ## Result after Simulation
