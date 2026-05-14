@@ -1,0 +1,517 @@
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+#c{display:block;width:100%;aspect-ratio:16/9;background:#000;border-radius:6px;cursor:pointer}
+#wrap{position:relative;width:100%;border-radius:6px;overflow:hidden;background:#000}
+#ui{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:20}
+#ui button{background:rgba(0,20,40,0.8);border:1px solid rgba(0,180,255,0.4);color:#0af;font-family:monospace;font-size:11px;padding:5px 14px;border-radius:3px;cursor:pointer;letter-spacing:1px}
+#ui button:hover{background:rgba(0,60,120,0.8)}
+#phaselbl{position:absolute;top:8px;left:50%;transform:translateX(-50%);background:rgba(0,10,25,0.7);border:1px solid rgba(0,180,255,0.3);color:#0af;font-family:monospace;font-size:11px;padding:4px 16px;border-radius:2px;letter-spacing:2px;z-index:20;pointer-events:none}
+</style>
+<div id="wrap">
+<canvas id="c"></canvas>
+<div id="phaselbl" id="phaselbl">INITIALISING SMART MICROGRID</div>
+<div id="ui">
+  <button onclick="restart()">RESTART</button>
+  <button onclick="togglePause()">PAUSE / PLAY</button>
+</div>
+</div>
+<script>
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+const wrap=document.getElementById('wrap');
+const phaselbl=document.getElementById('phaselbl');
+
+function resize(){
+  const w=wrap.clientWidth;
+  canvas.width=w*devicePixelRatio;
+  canvas.height=(w*9/16)*devicePixelRatio;
+  canvas.style.width=w+'px';
+  canvas.style.height=(w*9/16)+'px';
+}
+resize();
+window.addEventListener('resize',resize);
+
+const W=()=>canvas.width, H=()=>canvas.height;
+const sc=()=>canvas.width/1920;
+
+let t=0,paused=false,phase=0,phaseT=0;
+let freq=50,freqV=0,targetFreq=50;
+let pidOut=0,integral=0,prevErr=0;
+let freqHistory=[];
+let particles=[];
+let energyNodes=[];
+let alarmFlash=0,stabilizeGlow=0;
+let scanLine=0;
+let drones=[];
+let stars=[];
+
+for(let i=0;i<120;i++) stars.push({x:Math.random(),y:Math.random(),r:Math.random()*1.2+0.3,b:Math.random()});
+
+const PHASES=[
+  {name:'PHASE 1 — BASELINE OPERATION',dur:180},
+  {name:'PHASE 2 — LOAD SURGE DETECTED',dur:160},
+  {name:'PHASE 3 — FREQUENCY INSTABILITY',dur:160},
+  {name:'PHASE 4 — PID CONTROL ENGAGING',dur:200},
+  {name:'PHASE 5 — GRID STABILISED',dur:180},
+];
+
+const devices=[
+  {label:'Medical Unit',icon:'M',color:'#00ccff',active:false,x:0.12,y:0.62,load:18},
+  {label:'Radar Array',icon:'R',color:'#ff6600',active:false,x:0.25,y:0.68,load:22},
+  {label:'Drone Hub',icon:'D',color:'#ffcc00',active:false,x:0.12,y:0.78,load:15},
+  {label:'Comms Tower',icon:'C',color:'#00ff88',active:false,x:0.25,y:0.58,load:9},
+  {label:'Water Pump',icon:'W',color:'#44aaff',active:false,x:0.08,y:0.70,load:12},
+  {label:'Emerg. Light',icon:'L',color:'#ffffff',active:false,x:0.20,y:0.75,load:8},
+];
+
+for(let i=0;i<5;i++) drones.push({
+  x:Math.random()*0.3+0.05,y:Math.random()*0.3+0.05,
+  vx:(Math.random()-0.5)*0.002,vy:(Math.random()-0.5)*0.001,
+  active:false,trail:[]
+});
+
+function mkParticle(x,y,col,speed,life){
+  const a=Math.random()*Math.PI*2;
+  particles.push({x,y,vx:Math.cos(a)*speed*(0.5+Math.random()),vy:Math.sin(a)*speed*(0.5+Math.random()),col,life,maxLife:life,r:1+Math.random()*2});
+}
+
+function mkEnergyFlow(x1,y1,x2,y2,col){
+  energyNodes.push({x1,y1,x2,y2,col,p:0,speed:0.012+Math.random()*0.008,life:120});
+}
+
+function lerp(a,b,t){return a+(b-a)*t}
+function easeInOut(t){return t<0.5?2*t*t:1-Math.pow(-2*t+2,2)/2}
+
+function getPhase(){
+  let acc=0;
+  for(let i=0;i<PHASES.length;i++){
+    acc+=PHASES[i].dur;
+    if(t<acc) return i;
+  }
+  return PHASES.length-1;
+}
+
+function restart(){t=0;paused=false;freq=50;freqV=0;targetFreq=50;pidOut=0;integral=0;prevErr=0;freqHistory=[];particles=[];energyNodes=[];alarmFlash=0;stabilizeGlow=0;devices.forEach(d=>d.active=false);drones.forEach(d=>{d.active=false;d.trail=[]});}
+function togglePause(){paused=!paused;}
+
+function drawStarfield(){
+  stars.forEach(s=>{
+    const blink=0.3+0.7*Math.abs(Math.sin(t*0.03+s.b*10));
+    ctx.fillStyle=`rgba(180,220,255,${blink*0.6})`;
+    ctx.beginPath();
+    ctx.arc(s.x*W(),s.y*H()*0.55,s.r*sc()*2,0,Math.PI*2);
+    ctx.fill();
+  });
+}
+
+function drawHorizon(){
+  const g=ctx.createLinearGradient(0,0,0,H()*0.55);
+  g.addColorStop(0,'#000510');
+  g.addColorStop(0.6,'#001428');
+  g.addColorStop(1,'#002040');
+  ctx.fillStyle=g;
+  ctx.fillRect(0,0,W(),H()*0.55);
+
+  const g2=ctx.createLinearGradient(0,H()*0.55,0,H());
+  g2.addColorStop(0,'#0a0f1a');
+  g2.addColorStop(1,'#050a12');
+  ctx.fillStyle=g2;
+  ctx.fillRect(0,H()*0.55,W(),H()*0.45);
+
+  ctx.strokeStyle='rgba(0,150,255,0.15)';
+  ctx.lineWidth=1;
+  for(let i=0;i<12;i++){
+    const y=H()*0.55+i*(H()*0.45/11);
+    ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W(),y);ctx.stroke();
+  }
+  for(let i=0;i<20;i++){
+    const x=i*(W()/19);
+    ctx.beginPath();ctx.moveTo(x,H()*0.55);ctx.lineTo(x,H());ctx.stroke();
+  }
+}
+
+function drawGenerators(){
+  const s=sc();
+  [[0.72,0.72],[0.80,0.68],[0.88,0.74]].forEach(([rx,ry],i)=>{
+    const x=rx*W(),y=ry*H();
+    const running=phase>=0;
+    const col=i===2&&phase<3?'rgba(60,80,100,0.7)':(freq<49.2||freq>50.8)?'rgba(255,80,0,0.9)':'rgba(0,200,120,0.7)';
+
+    ctx.strokeStyle=col;ctx.lineWidth=2*s;
+    ctx.strokeRect(x-28*s,y-18*s,56*s,36*s);
+
+    ctx.fillStyle=col;ctx.globalAlpha=0.15;
+    ctx.fillRect(x-28*s,y-18*s,56*s,36*s);ctx.globalAlpha=1;
+
+    ctx.fillStyle='rgba(0,200,255,0.9)';
+    ctx.font=`bold ${10*s}px monospace`;
+    ctx.textAlign='center';
+    ctx.fillText('GEN-'+'ABC'[i],x,y-5*s);
+
+    if(running){
+      const rpm=i===2&&phase<3?0:(85+Math.sin(t*0.2+i)*5);
+      ctx.fillStyle=freq<49?'#ff4400':freq<49.5?'#ffaa00':'#00ff88';
+      ctx.fillText(rpm.toFixed(0)+'%',x,y+8*s);
+    }
+
+    if(running&&Math.random()<0.3){
+      mkParticle(x+(Math.random()-0.5)*20*s,y-18*s,'rgba(80,180,255,0.6)',0.3*s,20);
+    }
+  });
+}
+
+function drawDevicePanel(){
+  const s=sc();
+  const px=0.04*W(), py=0.56*H();
+  ctx.strokeStyle='rgba(0,150,255,0.3)';ctx.lineWidth=s;
+  ctx.strokeRect(px,py,0.26*W(),0.38*H());
+  ctx.fillStyle='rgba(0,10,30,0.7)';ctx.fillRect(px,py,0.26*W(),0.38*H());
+
+  ctx.fillStyle='rgba(0,180,255,0.8)';
+  ctx.font=`bold ${9*s}px monospace`;
+  ctx.textAlign='left';
+  ctx.fillText('ACTIVE LOAD MONITOR',px+6*s,py+14*s);
+
+  devices.forEach((d,i)=>{
+    const dx=px+8*s, dy=py+28*s+i*22*s;
+    const glow=d.active?(0.5+0.5*Math.sin(t*0.3+i)):0.15;
+    ctx.fillStyle=d.active?d.color:'rgba(60,80,100,0.5)';
+    ctx.globalAlpha=glow;
+    ctx.beginPath();ctx.arc(dx+5*s,dy+4*s,5*s,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=1;
+
+    ctx.fillStyle=d.active?d.color:'rgba(80,100,130,0.7)';
+    ctx.font=`${9*s}px monospace`;
+    ctx.fillText(d.label,dx+14*s,dy+8*s);
+
+    if(d.active){
+      ctx.fillStyle='rgba(255,80,80,0.9)';
+      ctx.font=`bold ${9*s}px monospace`;
+      ctx.textAlign='right';
+      ctx.fillText('+'+d.load+'kW',px+0.25*W()-4*s,dy+8*s);
+      ctx.textAlign='left';
+
+      if(Math.random()<0.15) mkEnergyFlow(d.x*W(),d.y*H(),0.55*W(),0.65*H(),d.color);
+    }
+  });
+}
+
+function drawFreqGraph(){
+  const s=sc();
+  const gx=0.35*W(), gy=0.57*H(), gw=0.28*W(), gh=0.18*H();
+
+  ctx.fillStyle='rgba(0,5,20,0.85)';ctx.fillRect(gx,gy,gw,gh);
+  ctx.strokeStyle='rgba(0,150,255,0.4)';ctx.lineWidth=s;ctx.strokeRect(gx,gy,gw,gh);
+
+  ctx.fillStyle='rgba(0,180,255,0.7)';
+  ctx.font=`bold ${9*s}px monospace`;ctx.textAlign='left';
+  ctx.fillText('FREQUENCY MONITOR — Hz',gx+4*s,gy+12*s);
+
+  [49,49.5,50,50.5,51].forEach(f=>{
+    const fy=gy+gh-((f-48.8)/2.4)*gh;
+    ctx.strokeStyle=f===50?'rgba(0,200,255,0.4)':'rgba(0,100,150,0.2)';
+    ctx.lineWidth=f===50?1.5*s:0.5*s;
+    ctx.beginPath();ctx.moveTo(gx,fy);ctx.lineTo(gx+gw,fy);ctx.stroke();
+    ctx.fillStyle='rgba(0,150,200,0.5)';ctx.font=`${8*s}px monospace`;
+    ctx.textAlign='left';ctx.fillText(f.toFixed(1),gx+2*s,fy-2*s);
+  });
+
+  if(freqHistory.length>2){
+    ctx.beginPath();
+    freqHistory.forEach((f,i)=>{
+      const fx=gx+((i/(Math.max(1,freqHistory.length-1)))*gw);
+      const fy=gy+gh-((f-48.8)/2.4)*gh;
+      i===0?ctx.moveTo(fx,fy):ctx.lineTo(fx,fy);
+    });
+    const dev=Math.abs(freq-50);
+    ctx.strokeStyle=dev>0.7?'#ff3300':dev>0.3?'#ff9900':'#00ffaa';
+    ctx.lineWidth=2*s;ctx.stroke();
+  }
+
+  ctx.fillStyle=Math.abs(freq-50)>0.7?'#ff3300':Math.abs(freq-50)>0.3?'#ffaa00':'#00ffcc';
+  ctx.font=`bold ${18*s}px monospace`;ctx.textAlign='right';
+  ctx.fillText(freq.toFixed(2)+' Hz',gx+gw-4*s,gy+gh-6*s);
+}
+
+function drawPIDPanel(){
+  const s=sc();
+  const px=0.35*W(), py=0.77*H(), pw=0.28*W(), ph=0.18*H();
+
+  ctx.fillStyle='rgba(0,5,20,0.85)';ctx.fillRect(px,py,pw,ph);
+  ctx.strokeStyle='rgba(0,255,150,0.35)';ctx.lineWidth=s;ctx.strokeRect(px,py,pw,ph);
+
+  ctx.fillStyle='rgba(0,220,150,0.8)';
+  ctx.font=`bold ${9*s}px monospace`;ctx.textAlign='left';
+  ctx.fillText('PID FREQUENCY CONTROLLER',px+4*s,py+13*s);
+
+  const err=freq-50;
+  const Kp=2.0,Ki=0.4,Kd=0.3;
+  const kpC=(Math.abs(err)*Kp*0.5).toFixed(2);
+  const kiC=(Math.abs(integral)*Ki*0.01).toFixed(2);
+  const kdC=(Math.abs(err-prevErr)*Kd*10).toFixed(2);
+
+  [['Kp',kpC,'#00aaff'],['Ki',kiC,'#ffaa00'],['Kd',kdC,'#00ff88']].forEach(([lbl,val,col],i)=>{
+    const ry=py+24*s+i*28*s;
+    ctx.fillStyle='rgba(40,60,100,0.5)';
+    ctx.fillRect(px+4*s,ry,pw-8*s,10*s);
+    const bw=Math.min(1,parseFloat(val)/2)*(pw-8*s);
+    ctx.fillStyle=col;ctx.globalAlpha=0.7;
+    ctx.fillRect(px+4*s,ry,bw,10*s);ctx.globalAlpha=1;
+    ctx.fillStyle='rgba(180,220,255,0.9)';
+    ctx.font=`${9*s}px monospace`;
+    ctx.fillText(lbl+': '+val,px+6*s,ry+8*s);
+    ctx.fillStyle=col;ctx.textAlign='right';
+    ctx.fillText(lbl,px+pw-6*s,ry+8*s);ctx.textAlign='left';
+  });
+
+  ctx.fillStyle='rgba(0,255,150,0.9)';
+  ctx.font=`${9*s}px monospace`;
+  ctx.fillText('ERR: '+(err).toFixed(3)+' Hz   OUT: '+(pidOut*0.1).toFixed(3)+' MW',px+4*s,py+ph-6*s);
+}
+
+function drawHolographicDashboard(){
+  const s=sc();
+  const dx=0.65*W(), dy=0.57*H(), dw=0.31*W(), dh=0.38*H();
+
+  ctx.fillStyle='rgba(0,5,20,0.85)';ctx.fillRect(dx,dy,dw,dh);
+  ctx.strokeStyle='rgba(0,200,255,0.3)';ctx.lineWidth=s;ctx.strokeRect(dx,dy,dw,dh);
+
+  ctx.fillStyle='rgba(0,200,255,0.7)';
+  ctx.font=`bold ${9*s}px monospace`;ctx.textAlign='left';
+  ctx.fillText('SMART GRID CONTROL — HOLOGRAPHIC HUD',dx+4*s,dy+13*s);
+
+  const metrics=[
+    ['GRID FREQ',freq.toFixed(2)+'Hz',Math.abs(freq-50)>0.5?'#ff4400':Math.abs(freq-50)>0.2?'#ffaa00':'#00ffaa'],
+    ['TOTAL LOAD',(83+(phase>=1?64:0)).toFixed(0)+'kW',phase>=1&&phase<4?'#ff9900':'#00aaff'],
+    ['GEN OUTPUT',(85+Math.sin(t*0.1)*3).toFixed(0)+'%','#00ccff'],
+    ['PID STATUS',phase>=3?'ACTIVE':'STANDBY',phase>=3?'#00ff88':'#446688'],
+    ['STABILITY',phase>=4?'RESTORED':phase>=2?'CRITICAL':'NOMINAL',phase>=4?'#00ffaa':phase>=2?'#ff3300':'#00aaff'],
+    ['NET VOLTAGE',(230+Math.sin(t*0.15)*2*(phase<4?3:0.2)).toFixed(1)+'V','#aaccff'],
+  ];
+
+  metrics.forEach(([lbl,val,col],i)=>{
+    const mx=dx+6*s+(i%2)*dw*0.49, my=dy+26*s+Math.floor(i/2)*40*s;
+    ctx.strokeStyle='rgba(0,100,180,0.3)';ctx.lineWidth=0.5*s;
+    ctx.strokeRect(mx,my,dw*0.46,32*s);
+    ctx.fillStyle='rgba(0,20,50,0.5)';ctx.fillRect(mx,my,dw*0.46,32*s);
+    ctx.fillStyle='rgba(100,160,220,0.6)';ctx.font=`${8*s}px monospace`;
+    ctx.fillText(lbl,mx+4*s,my+11*s);
+    ctx.fillStyle=col;ctx.font=`bold ${11*s}px monospace`;
+    ctx.fillText(val,mx+4*s,my+26*s);
+  });
+
+  const radarCx=dx+dw*0.75, radarCy=dy+dh-55*s, radarR=28*s;
+  ctx.strokeStyle='rgba(0,200,100,0.25)';ctx.lineWidth=s;
+  [1,0.66,0.33].forEach(r=>{ctx.beginPath();ctx.arc(radarCx,radarCy,radarR*r,0,Math.PI*2);ctx.stroke();});
+  const ra=(t*0.04)%(Math.PI*2);
+  ctx.strokeStyle='rgba(0,255,100,0.7)';ctx.lineWidth=1.5*s;
+  ctx.beginPath();ctx.moveTo(radarCx,radarCy);
+  ctx.lineTo(radarCx+Math.cos(ra)*radarR,radarCy+Math.sin(ra)*radarR);ctx.stroke();
+  ctx.fillStyle='rgba(0,255,100,0.4)';
+  ctx.beginPath();ctx.moveTo(radarCx,radarCy);
+  ctx.arc(radarCx,radarCy,radarR,ra-0.6,ra);ctx.closePath();ctx.fill();
+  ctx.fillStyle='rgba(0,200,255,0.6)';ctx.font=`${7*s}px monospace`;ctx.textAlign='center';
+  ctx.fillText('RADAR',radarCx,dy+dh-12*s);
+}
+
+function drawEnergyFlows(){
+  energyNodes=energyNodes.filter(n=>n.life>0);
+  energyNodes.forEach(n=>{
+    n.p+=n.speed; n.life--;
+    if(n.p>1) n.p=0;
+    const px=lerp(n.x1,n.x2,n.p), py=lerp(n.y1,n.y2,n.p);
+    ctx.fillStyle=n.col;
+    ctx.globalAlpha=n.life/120*0.8;
+    ctx.beginPath();ctx.arc(px,py,3*sc(),0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=1;
+  });
+}
+
+function drawParticles(){
+  particles=particles.filter(p=>p.life>0);
+  particles.forEach(p=>{
+    p.x+=p.vx; p.y+=p.vy; p.vy+=0.05*sc(); p.life--;
+    ctx.fillStyle=p.col;ctx.globalAlpha=p.life/p.maxLife;
+    ctx.beginPath();ctx.arc(p.x,p.y,p.r*sc(),0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=1;
+  });
+}
+
+function drawAlarms(){
+  if(alarmFlash>0){
+    const alpha=Math.sin(t*0.3)*0.5+0.5;
+    ctx.fillStyle=`rgba(255,0,0,${alarmFlash*alpha*0.08})`;
+    ctx.fillRect(0,0,W(),H());
+
+    const s=sc();
+    ctx.fillStyle=`rgba(255,40,0,${alarmFlash*0.95})`;
+    ctx.font=`bold ${14*s}px monospace`;ctx.textAlign='center';
+    ctx.fillText('⚠  FREQUENCY INSTABILITY DETECTED — LOAD SURGE  ⚠',W()/2,0.22*H());
+
+    if(phase===2||phase===3){
+      const alerts=['MEDICAL UNIT +18kW','RADAR ARRAY +22kW','DRONE HUB +15kW','COMMS BOOST +9kW','WATER PUMP +12kW'];
+      ctx.font=`${10*s}px monospace`;ctx.fillStyle=`rgba(255,180,0,${alarmFlash*0.9})`;
+      alerts.forEach((a,i) => ctx.fillText(a,W()/2,0.28*H()+i*14*s));
+    }
+  }
+  if(stabilizeGlow>0){
+    ctx.fillStyle=`rgba(0,255,150,${stabilizeGlow*0.06})`;
+    ctx.fillRect(0,0,W(),H());
+    const s=sc();
+    ctx.fillStyle=`rgba(0,255,180,${stabilizeGlow})`;
+    ctx.font=`bold ${14*s}px monospace`;ctx.textAlign='center';
+    ctx.fillText('✓  GRID FREQUENCY STABILISED — PID CONTROL ACTIVE  ✓',W()/2,0.22*H());
+  }
+}
+
+function drawScanLine(){
+  scanLine=(scanLine+1.5*sc())%H();
+  ctx.strokeStyle='rgba(0,200,255,0.04)';ctx.lineWidth=2*sc();
+  ctx.beginPath();ctx.moveTo(0,scanLine);ctx.lineTo(W(),scanLine);ctx.stroke();
+}
+
+function drawDrones(){
+  const s=sc();
+  drones.forEach(d=>{
+    if(!d.active) return;
+    d.x+=d.vx; d.y+=d.vy;
+    if(d.x<0.02||d.x>0.45){d.vx*=-1;}
+    if(d.y<0.02||d.y>0.48){d.vy*=-1;}
+    d.trail.push({x:d.x*W(),y:d.y*H()});
+    if(d.trail.length>20) d.trail.shift();
+
+    ctx.strokeStyle='rgba(255,200,0,0.3)';ctx.lineWidth=s;
+    ctx.beginPath();
+    d.trail.forEach((pt,i)=>{i===0?ctx.moveTo(pt.x,pt.y):ctx.lineTo(pt.x,pt.y)});ctx.stroke();
+
+    ctx.fillStyle='rgba(255,220,50,0.9)';
+    ctx.beginPath();ctx.arc(d.x*W(),d.y*H(),4*s,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='rgba(255,220,50,0.4)';ctx.lineWidth=s;
+    ctx.beginPath();ctx.arc(d.x*W(),d.y*H(),10*s,0,Math.PI*2);ctx.stroke();
+  });
+}
+
+function drawTitle(){
+  const s=sc();
+  ctx.fillStyle='rgba(0,180,255,0.85)';
+  ctx.font=`bold ${13*s}px monospace`;ctx.textAlign='left';
+  ctx.fillText('SMART PORTABLE MICROGRID — DISASTER RELIEF / TACTICAL DEFENSE',0.03*W(),0.04*H());
+  ctx.fillStyle='rgba(100,180,255,0.5)';
+  ctx.font=`${9*s}px monospace`;
+  ctx.fillText('PI/PID ADAPTIVE FREQUENCY CONTROL SYSTEM  ·  REAL-TIME MONITORING  ·  '+
+    new Date().toISOString().slice(0,19).replace('T',' '),0.03*W(),0.07*H());
+
+  ctx.textAlign='right';
+  ctx.fillStyle='rgba(0,200,100,0.7)';
+  ctx.fillText('GRID: '+(['STABLE','MONITORING','UNSTABLE','PID ACTIVE','RESTORED'][Math.min(4,phase)]),0.97*W(),0.04*H());
+  ctx.fillStyle='rgba(100,180,255,0.5)';ctx.font=`${9*s}px monospace`;
+  ctx.fillText('16:9  ·  ULTRA HD  ·  T+'+(t/60).toFixed(1)+'s',0.97*W(),0.07*H());
+  ctx.textAlign='left';
+}
+
+function updatePhysics(){
+  phase=getPhase();
+  phaseT++;
+
+  const pDur=[0,...PHASES.map(p=>p.dur)];
+  let acc=0;
+  for(let i=0;i<phase;i++) acc+=PHASES[i].dur;
+  const localT=t-acc;
+  const pProg=localT/PHASES[phase].dur;
+
+  if(phase===0){
+    targetFreq=50+Math.sin(t*0.05)*0.05;
+    alarmFlash=0; stabilizeGlow=0;
+    devices.forEach(d=>d.active=false);
+    drones.forEach(d=>d.active=false);
+    integral=0;prevErr=0;pidOut=0;
+    if(t%20===0) mkEnergyFlow(0.75*W(),0.7*H(),0.55*W(),0.65*H(),'rgba(0,200,100,0.6)');
+  }
+
+  if(phase===1){
+    const surge=easeInOut(Math.min(1,pProg*2));
+    targetFreq=50-surge*0.4+Math.sin(t*0.1)*0.08;
+    alarmFlash=surge*0.3;
+    devices.slice(0,2).forEach((d,i)=>{d.active=pProg>i*0.3;});
+    drones.forEach((d,i)=>{d.active=pProg>0.5;});
+    if(t%10===0) devices.slice(0,2).forEach(d=>{if(d.active) mkParticle(d.x*W(),d.y*H(),d.color,1.5*sc(),30);});
+  }
+
+  if(phase===2){
+    targetFreq=50-1.1+Math.sin(t*0.2)*0.4+Math.sin(t*0.07)*0.25;
+    alarmFlash=0.8+Math.sin(t*0.4)*0.2;
+    devices.forEach(d=>d.active=true);
+    drones.forEach(d=>d.active=true);
+    if(t%5===0) devices.forEach(d=>mkParticle(d.x*W(),d.y*H(),d.color,2*sc(),40));
+    if(t%8===0) mkEnergyFlow(0.35*W(),0.65*H(),0.55*W(),0.65*H(),'rgba(255,50,0,0.7)');
+  }
+
+  if(phase===3){
+    const recovery=easeInOut(Math.min(1,pProg));
+    const disturbance=(1-recovery);
+    const err=freq-50;
+    integral+=err*0.016;
+    const derivative=err-prevErr;
+    pidOut=2.0*err+0.4*integral+0.3*derivative;
+    prevErr=err;
+    targetFreq=(50-1.0*disturbance+Math.sin(t*0.15)*0.15*disturbance)-pidOut*0.03;
+    targetFreq=Math.max(49.0,Math.min(51.2,targetFreq));
+    alarmFlash=Math.max(0,(1-recovery)*0.6);
+    stabilizeGlow=recovery>0.6?((recovery-0.6)/0.4)*0.7:0;
+    devices.forEach((d,i)=>{d.active=true;});
+    if(t%15===0) mkEnergyFlow(0.55*W(),0.65*H(),0.75*W(),0.7*H(),'rgba(0,255,150,0.6)');
+  }
+
+  if(phase===4){
+    targetFreq=50+Math.sin(t*0.06)*0.015;
+    alarmFlash=0; stabilizeGlow=0.8+Math.sin(t*0.1)*0.2;
+    devices.forEach(d=>d.active=true);
+    drones.forEach(d=>d.active=true);
+    integral*=0.99; pidOut*=0.97;
+    if(t%12===0) mkEnergyFlow(0.55*W(),0.65*H(),0.75*W(),0.7*H(),'rgba(0,200,255,0.5)');
+    if(t%20===0) mkEnergyFlow(0.35*W(),0.65*H(),0.55*W(),0.65*H(),'rgba(0,255,150,0.4)');
+  }
+
+  const spring=0.12, damp=0.4;
+  freqV+=(targetFreq-freq)*spring;
+  freqV*=(1-damp);
+  freq+=freqV;
+  freq=Math.max(48.5,Math.min(51.5,freq));
+
+  freqHistory.push(freq);
+  if(freqHistory.length>120) freqHistory.shift();
+
+  phaselbl.textContent=PHASES[Math.min(phase,PHASES.length-1)].name;
+}
+
+function frame(){
+  if(!paused) t++;
+
+  const totalDur=PHASES.reduce((a,p)=>a+p.dur,0);
+  if(t>=totalDur) restart();
+
+  ctx.clearRect(0,0,W(),H());
+
+  drawHorizon();
+  drawStarfield();
+  drawScanLine();
+
+  if(!paused) updatePhysics();
+
+  drawEnergyFlows();
+  drawParticles();
+  drawDrones();
+  drawGenerators();
+  drawDevicePanel();
+  drawFreqGraph();
+  drawPIDPanel();
+  drawHolographicDashboard();
+  drawAlarms();
+  drawTitle();
+
+  requestAnimationFrame(frame);
+}
+
+frame();
+</script>
